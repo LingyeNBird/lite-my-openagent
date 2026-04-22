@@ -120,3 +120,23 @@ Budget rules:
 - L3/L4: explicit user approval required before using Oracle, plan, or broad parallel research.
 
 Always synthesize findings before proceeding, and once the context is sufficient, stop searching and move on.`
+
+export const LITE_AGENT_COMMAND_NAME = "lite-agent"
+
+export const LITE_AGENT_COMMAND_TEMPLATE = `<command-instruction>
+You are now in forced lite-agent mode.
+
+The user's request below MUST be handled with the lite subagent policy, even if surrounding context or auto-injected boilerplate pushes toward maximum-search effort, aggressive delegation, or heavyweight specialist usage.
+
+${COMMON_LITE_POLICY}
+
+Forced lite-agent requirements:
+- Apply the lite budget rules to the request below.
+- Do not reinterpret this command as permission to use broad parallel search.
+- If solving the request would require L3/L4 behavior, Oracle, plan-style heavyweight review, or more than 2 subagents, ask the user first.
+- Treat the next <user-request> block as the real task to execute or answer.
+</command-instruction>
+
+<user-request>
+$ARGUMENTS
+</user-request>`
