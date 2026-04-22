@@ -5,13 +5,44 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "README.zh-cn.md"
   ],
   "scripts": {
+    "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepack": "npm run clean && npm run build",
+    "pack:check": "npm pack --dry-run"
+  },
+  "keywords": [
+    "opencode",
+    "plugin",
+    "oh-my-openagent",
+    "agent",
+    "prompt",
+    "overlay"
+  ],
+  "author": "lingye",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LingyeNBird/lite-my-openagent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/LingyeNBird/lite-my-openagent/issues"
+  },
+  "homepage": "https://github.com/LingyeNBird/lite-my-openagent#readme",
+  "publishConfig": {
+    "access": "public"
   },
   "devDependencies": {
     "@opencode-ai/plugin": "^1.4.0",
