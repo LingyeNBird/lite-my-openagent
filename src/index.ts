@@ -1,10 +1,16 @@
 import type { Hooks, Plugin } from "@opencode-ai/plugin"
 
-import { rewriteAgentPrompts, rewriteInjectedModeText } from "./rewriters.js"
+import {
+  ensureLiteAgentCommand,
+  rewriteAgentPrompts,
+  rewriteInjectedModeText,
+  rewriteLiteAgentSlashCommand,
+} from "./rewriters.js"
 
 const litePlugin: Plugin = async (): Promise<Hooks> => {
   return {
     config: async (config: Record<string, unknown>) => {
+      ensureLiteAgentCommand(config)
       rewriteAgentPrompts(config)
     },
 
@@ -21,6 +27,7 @@ const litePlugin: Plugin = async (): Promise<Hooks> => {
           continue
         }
 
+        part.text = rewriteLiteAgentSlashCommand(part.text)
         part.text = rewriteInjectedModeText(part.text)
       }
     },
