@@ -22,6 +22,16 @@ Based on the user's `子代理调用规范.md`:
 - `L3/L4`: must ask the user for approval first
 - no nested same-topic search delegation
 
+## Slash command
+
+This plugin also registers an explicit slash command:
+
+```bash
+/lite-agent <request>
+```
+
+When used, it forces one request to run with the lite subagent constraints injected in front of the request, instead of relying on the default OmO orchestration behavior.
+
 ## Install order
 
 Put this plugin **after** `oh-my-openagent` in your OpenCode plugin list so its hooks run later and can rewrite OmO's prompt/config output.
