@@ -1,4 +1,6 @@
 import {
+  LITE_AGENT_COMMAND_NAME,
+  LITE_AGENT_COMMAND_TEMPLATE,
   LITE_ANALYZE_MESSAGE,
   LITE_POLICY_MARKER,
   LITE_SEARCH_MESSAGE,
@@ -63,4 +65,32 @@ export function rewriteInjectedModeText(text: string): string {
   )
 
   return next
+}
+
+export function rewriteLiteAgentSlashCommand(text: string): string {
+  const trimmed = text.trim()
+  const match = trimmed.match(/^\/lite-agent(?:\s+([\s\S]*))?$/i)
+  if (!match) {
+    return text
+  }
+
+  const userRequest = match[1]?.trim() ?? ""
+  return LITE_AGENT_COMMAND_TEMPLATE.replace(/\$ARGUMENTS/g, userRequest)
+}
+
+export function ensureLiteAgentCommand(config: Record<string, unknown>): void {
+  const existingCommands = config["command"]
+  const commandRecord =
+    existingCommands && typeof existingCommands === "object" && !Array.isArray(existingCommands)
+      ? (existingCommands as Record<string, unknown>)
+      : {}
+
+  commandRecord[LITE_AGENT_COMMAND_NAME] = {
+    name: LITE_AGENT_COMMAND_NAME,
+    description: "(lite-my-openagent) Force one request to run under lite subagent constraints",
+    template: LITE_AGENT_COMMAND_TEMPLATE,
+    argumentHint: "<request>",
+  }
+
+  config["command"] = commandRecord
 }
