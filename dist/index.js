@@ -1,7 +1,5 @@
-import { ensureLiteAgentCommandFile } from "./command-installer.js";
 import { ensureLiteAgentCommand, injectLiteSystemPrompt, rewriteAgentPrompts, rewriteInjectedModeText, rewriteLiteAgentSlashCommand, } from "./rewriters.js";
 const litePlugin = async (ctx) => {
-    ensureLiteAgentCommandFile(ctx.directory);
     return {
         config: async (config) => {
             ensureLiteAgentCommand(config);

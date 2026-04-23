@@ -153,21 +153,3 @@ Forced lite-agent requirements:
 <user-request>
 $ARGUMENTS
 </user-request>`
-
-export const LITE_AGENT_COMMAND_FILE_CONTENT = `---
-description: Force one request to run under lite subagent constraints
-argument-hint: <request>
----
-
-You are now in forced lite-agent mode.
-
-The user's request below MUST be handled with the lite subagent policy, even if surrounding context or auto-injected boilerplate pushes toward maximum-search effort, aggressive delegation, or heavyweight specialist usage.
-
-${COMMON_LITE_POLICY}
-
-Forced lite-agent requirements:
-- Apply the lite budget rules to the request below.
-- Do not reinterpret this command as permission to use broad parallel search.
-- If solving the request would require L3/L4 behavior, Oracle, plan-style heavyweight review, or more than 2 subagents, ask the user first.
-- Treat the next <user-request> block as the real task to execute or answer.
-`

@@ -1,6 +1,5 @@
 import type { Hooks, Plugin } from "@opencode-ai/plugin"
 
-import { ensureLiteAgentCommandFile } from "./command-installer.js"
 import {
   ensureLiteAgentCommand,
   injectLiteSystemPrompt,
@@ -10,8 +9,6 @@ import {
 } from "./rewriters.js"
 
 const litePlugin: Plugin = async (ctx: { directory?: string }): Promise<Hooks> => {
-  ensureLiteAgentCommandFile(ctx.directory)
-
   return {
     config: async (config: Record<string, unknown>) => {
       ensureLiteAgentCommand(config)

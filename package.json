@@ -19,9 +19,9 @@
   ],
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build": "tsc -p tsconfig.json",
+    "build": "pnpm run clean && tsc -p tsconfig.json && node -e \"const fs=require('fs'); try{fs.unlinkSync('dist/command-installer.js')}catch{} try{fs.unlinkSync('dist/command-installer.d.ts')}catch{}\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "prepack": "pnpm run clean && pnpm run build",
+    "prepack": "pnpm run build",
     "pack:check": "node scripts/pack-check.mjs"
   },
   "keywords": [
