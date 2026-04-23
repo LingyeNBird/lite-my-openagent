@@ -61,7 +61,7 @@ export function rewriteInjectedModeText(text: string): string {
   )
 
   next = next.replace(
-    /\[analyze-mode\]\s*ANALYSIS MODE\.[\s\S]*?SYNTHESIZE findings before proceeding\.(?:\s*---\s*MANDATORY delegate_task params:[\s\S]*?)?(?=(\n\n---\n\n|$))/g,
+    /\[analyze-mode\]\s*ANALYSIS MODE\.[\s\S]*?SYNTHESIZE findings before proceeding\.[\s\S]*?Example:\s*delegate_task\(subagent_type="explore", prompt="\.\.\.", run_in_background=true, load_skills=\[\]\)/g,
     LITE_ANALYZE_MESSAGE,
   )
 

@@ -30,7 +30,7 @@ export function rewriteInjectedModeText(text) {
     next = next.replace(ORIGINAL_SEARCH_MESSAGE, LITE_SEARCH_MESSAGE);
     next = next.replace(ORIGINAL_ANALYZE_MESSAGE, LITE_ANALYZE_MESSAGE);
     next = next.replace(/\[search-mode\]\s*MAXIMIZE SEARCH EFFORT\.[\s\S]*?NEVER stop at first result - be exhaustive\./g, LITE_SEARCH_MESSAGE);
-    next = next.replace(/\[analyze-mode\]\s*ANALYSIS MODE\.[\s\S]*?SYNTHESIZE findings before proceeding\.(?:\s*---\s*MANDATORY delegate_task params:[\s\S]*?)?(?=(\n\n---\n\n|$))/g, LITE_ANALYZE_MESSAGE);
+    next = next.replace(/\[analyze-mode\]\s*ANALYSIS MODE\.[\s\S]*?SYNTHESIZE findings before proceeding\.[\s\S]*?Example:\s*delegate_task\(subagent_type="explore", prompt="\.\.\.", run_in_background=true, load_skills=\[\]\)/g, LITE_ANALYZE_MESSAGE);
     return next;
 }
 export function rewriteLiteAgentSlashCommand(text) {
