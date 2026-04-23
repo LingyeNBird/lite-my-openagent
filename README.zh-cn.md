@@ -47,6 +47,33 @@
 }
 ```
 
+## 自动更新器
+
+这个插件内置了一套轻量级启动更新检查器，思路参考 `oh-my-openagent`。
+
+你可以通过插件 tuple 选项启用或调整它：
+
+```json
+{
+  "plugin": [
+    "oh-my-openagent",
+    ["lite-my-openagent@latest", { "auto_update": true, "show_update_toast": true }]
+  ]
+}
+```
+
+可用选项：
+
+- `auto_update`：默认是 `true`
+- `show_update_toast`：默认是 `true`
+
+说明：
+
+- 更新检查会在首个顶层 `session.created` 之后触发。
+- 如果配置里使用的是裸包名或 `@latest` 这类 dist-tag，实际是否能立即拉到最新版仍然依赖 OpenCode 的 npm 缓存策略。
+- 如果你希望行为最稳定、最可复现，优先使用精确版本，例如 `lite-my-openagent@0.1.6`。
+- 如果配置已经锁定为精确版本，自动更新器不会强行替换，只会提示有新版本。
+
 ## 构建
 
 ```bash

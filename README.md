@@ -47,6 +47,33 @@ Example:
 }
 ```
 
+## Auto updater
+
+This plugin includes a lightweight startup update checker inspired by `oh-my-openagent`.
+
+You can enable it with plugin tuple options:
+
+```json
+{
+  "plugin": [
+    "oh-my-openagent",
+    ["lite-my-openagent@latest", { "auto_update": true, "show_update_toast": true }]
+  ]
+}
+```
+
+Options:
+
+- `auto_update`: defaults to `true`
+- `show_update_toast`: defaults to `true`
+
+Notes:
+
+- The updater runs after the first top-level `session.created` event.
+- If your config uses a bare package name or a dist-tag such as `@latest`, the behavior still depends on OpenCode's npm cache policy.
+- If you want the most deterministic behavior, prefer an exact version such as `lite-my-openagent@0.1.6`.
+- Auto update will not replace a version-pinned entry automatically; it will only warn.
+
 ## Build
 
 ```bash
