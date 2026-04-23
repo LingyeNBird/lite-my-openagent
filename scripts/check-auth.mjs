@@ -1,9 +1,11 @@
 import { spawnSync } from "node:child_process"
 
-const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm"
+const pnpmCommand = process.platform === "win32"
+  ? { command: process.env.ComSpec || "cmd.exe", baseArgs: ["/d", "/s", "/c", "pnpm"] }
+  : { command: "pnpm", baseArgs: [] }
 
 function run(args, stdio = "inherit") {
-  return spawnSync(pnpmCmd, args, { stdio })
+  return spawnSync(pnpmCommand.command, [...pnpmCommand.baseArgs, ...args], { stdio })
 }
 
 const whoamiResult = run(["npm", "whoami"], "ignore")
