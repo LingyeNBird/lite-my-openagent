@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -196,13 +196,21 @@ function getUpdateStrategy(pluginInfo: PluginEntryInfo): "bare" | "tag" | "pinne
   return "tag"
 }
 
-function getCacheWorkspaceDir(): string {
-  return join(getCacheHome(), "opencode", "packages")
+function getEffectivePluginSpec(pluginInfo: PluginEntryInfo): string {
+  if (pluginInfo.entry === PACKAGE_NAME) {
+    return `${PACKAGE_NAME}@latest`
+  }
+
+  return pluginInfo.entry
 }
 
-function syncCachePackageJson(intentVersion: string, logger: RuntimeLogger): boolean {
+function getCacheWorkspaceDir(effectivePluginSpec: string): string {
+  return join(getCacheHome(), "opencode", "packages", effectivePluginSpec)
+}
+
+function syncCachePackageJson(workspaceDir: string, intentVersion: string, logger: RuntimeLogger): boolean {
   try {
-    const workspaceDir = getCacheWorkspaceDir()
+    mkdirSync(workspaceDir, { recursive: true })
     const packageJsonPath = join(workspaceDir, "package.json")
     const current = existsSync(packageJsonPath)
       ? (JSON.parse(readFileSync(packageJsonPath, "utf8")) as { dependencies?: Record<string, string> })
@@ -228,8 +236,7 @@ function syncCachePackageJson(intentVersion: string, logger: RuntimeLogger): boo
   }
 }
 
-function invalidateCachedPackage(logger: RuntimeLogger): void {
-  const workspaceDir = getCacheWorkspaceDir()
+function invalidateCachedPackage(workspaceDir: string, logger: RuntimeLogger): void {
   const packageDir = join(workspaceDir, "node_modules", PACKAGE_NAME)
   const packageLockPath = join(workspaceDir, "package-lock.json")
 
@@ -244,8 +251,7 @@ function invalidateCachedPackage(logger: RuntimeLogger): void {
   }
 }
 
-async function runInstall(logger: RuntimeLogger): Promise<InstallResult> {
-  const workspaceDir = getCacheWorkspaceDir()
+async function runInstall(workspaceDir: string, logger: RuntimeLogger): Promise<InstallResult> {
   const packageJsonPath = join(workspaceDir, "package.json")
 
   if (!existsSync(packageJsonPath)) {
@@ -388,6 +394,17 @@ async function runUpdateCheck(
   }
 
   const updateStrategy = getUpdateStrategy(pluginInfo)
+  const effectivePluginSpec = getEffectivePluginSpec(pluginInfo)
+  const workspaceDir = getCacheWorkspaceDir(effectivePluginSpec)
+
+  await logger.log("updater.cache_workspace.resolved", {
+    entry: pluginInfo.entry,
+    configPath: pluginInfo.configPath,
+    effectivePluginSpec,
+    workspaceDir,
+    strategy: updateStrategy,
+  })
+
   if (updateStrategy !== "pinned") {
     await logger.log("updater.config.non_pinned_entry", {
       entry: pluginInfo.entry,
@@ -436,15 +453,15 @@ async function runUpdateCheck(
   }
 
   const intentVersion = pluginInfo.pinnedVersion ?? "latest"
-  if (!syncCachePackageJson(intentVersion, logger)) {
+  if (!syncCachePackageJson(workspaceDir, intentVersion, logger)) {
     if (options.showUpdateToast) {
       await showToast(ctx, "lite-my-openagent update available", `v${latestVersion} available, but cache workspace sync failed.`, "warning")
     }
     return
   }
 
-  invalidateCachedPackage(logger)
-  const installResult = await runInstall(logger)
+  invalidateCachedPackage(workspaceDir, logger)
+  const installResult = await runInstall(workspaceDir, logger)
   if (!installResult.success) {
     if (options.showUpdateToast) {
       await showToast(ctx, "lite-my-openagent update available", `v${latestVersion} available, but install failed: ${installResult.error ?? "unknown error"}`, "warning")

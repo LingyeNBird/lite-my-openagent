@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -145,12 +145,18 @@ function getUpdateStrategy(pluginInfo) {
     }
     return "tag";
 }
-function getCacheWorkspaceDir() {
-    return join(getCacheHome(), "opencode", "packages");
+function getEffectivePluginSpec(pluginInfo) {
+    if (pluginInfo.entry === PACKAGE_NAME) {
+        return `${PACKAGE_NAME}@latest`;
+    }
+    return pluginInfo.entry;
 }
-function syncCachePackageJson(intentVersion, logger) {
+function getCacheWorkspaceDir(effectivePluginSpec) {
+    return join(getCacheHome(), "opencode", "packages", effectivePluginSpec);
+}
+function syncCachePackageJson(workspaceDir, intentVersion, logger) {
     try {
-        const workspaceDir = getCacheWorkspaceDir();
+        mkdirSync(workspaceDir, { recursive: true });
         const packageJsonPath = join(workspaceDir, "package.json");
         const current = existsSync(packageJsonPath)
             ? JSON.parse(readFileSync(packageJsonPath, "utf8"))
@@ -174,8 +180,7 @@ function syncCachePackageJson(intentVersion, logger) {
         return false;
     }
 }
-function invalidateCachedPackage(logger) {
-    const workspaceDir = getCacheWorkspaceDir();
+function invalidateCachedPackage(workspaceDir, logger) {
     const packageDir = join(workspaceDir, "node_modules", PACKAGE_NAME);
     const packageLockPath = join(workspaceDir, "package-lock.json");
     if (existsSync(packageDir)) {
@@ -187,8 +192,7 @@ function invalidateCachedPackage(logger) {
         void logger.log("updater.cache_lock.removed", { packageLockPath });
     }
 }
-async function runInstall(logger) {
-    const workspaceDir = getCacheWorkspaceDir();
+async function runInstall(workspaceDir, logger) {
     const packageJsonPath = join(workspaceDir, "package.json");
     if (!existsSync(packageJsonPath)) {
         return { success: false, error: `Workspace not initialized: ${packageJsonPath}` };
@@ -303,6 +307,15 @@ async function runUpdateCheck(ctx, logger, options) {
         return;
     }
     const updateStrategy = getUpdateStrategy(pluginInfo);
+    const effectivePluginSpec = getEffectivePluginSpec(pluginInfo);
+    const workspaceDir = getCacheWorkspaceDir(effectivePluginSpec);
+    await logger.log("updater.cache_workspace.resolved", {
+        entry: pluginInfo.entry,
+        configPath: pluginInfo.configPath,
+        effectivePluginSpec,
+        workspaceDir,
+        strategy: updateStrategy,
+    });
     if (updateStrategy !== "pinned") {
         await logger.log("updater.config.non_pinned_entry", {
             entry: pluginInfo.entry,
@@ -345,14 +358,14 @@ async function runUpdateCheck(ctx, logger, options) {
         return;
     }
     const intentVersion = pluginInfo.pinnedVersion ?? "latest";
-    if (!syncCachePackageJson(intentVersion, logger)) {
+    if (!syncCachePackageJson(workspaceDir, intentVersion, logger)) {
         if (options.showUpdateToast) {
             await showToast(ctx, "lite-my-openagent update available", `v${latestVersion} available, but cache workspace sync failed.`, "warning");
         }
         return;
     }
-    invalidateCachedPackage(logger);
-    const installResult = await runInstall(logger);
+    invalidateCachedPackage(workspaceDir, logger);
+    const installResult = await runInstall(workspaceDir, logger);
     if (!installResult.success) {
         if (options.showUpdateToast) {
             await showToast(ctx, "lite-my-openagent update available", `v${latestVersion} available, but install failed: ${installResult.error ?? "unknown error"}`, "warning");
