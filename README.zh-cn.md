@@ -85,3 +85,8 @@ pnpm run build
 
 - 这个插件故意采用 **prompt overlay** 的方式，而不是直接修改 OmO 源码。
 - 它依赖插件执行顺序。如果后面还有别的插件继续重写相同的 agent prompt 或消息内容，那么后加载的插件会覆盖它。
+
+
+## 友链
+
+[l站牛福](https://linux.do)
