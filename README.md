@@ -85,3 +85,6 @@ pnpm run build
 
 - This plugin intentionally uses prompt overlays instead of patching OmO source.
 - It depends on plugin execution order. If another plugin rewrites the same agents/messages after this one, that later plugin wins.
+
+## And you need this.
+linux.do 
