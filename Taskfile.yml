@@ -58,11 +58,10 @@ tasks:
     desc: "Prepare and publish a new pnpm-based npm release (usage: task publish VERSION=0.1.1)"
     requires:
       vars: [VERSION]
-    deps:
-      - check-clean
-      - check-version
-      - check-auth
     cmds:
+      - task: check-clean
+      - task: check-version
+      - task: check-auth
       - task: bump-version
       - task: preflight
       - task: release-commit
