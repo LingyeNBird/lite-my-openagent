@@ -1,4 +1,4 @@
-import { LITE_AGENT_COMMAND_NAME, LITE_AGENT_COMMAND_TEMPLATE, LITE_ANALYZE_MESSAGE, LITE_POLICY_MARKER, LITE_SEARCH_MESSAGE, ORIGINAL_ANALYZE_MESSAGE, ORIGINAL_SEARCH_MESSAGE, buildAtlasLiteOverlay, buildHephaestusLiteOverlay, buildPrometheusLiteOverlay, buildSisyphusLiteOverlay, } from "./lite-policy.js";
+import { LITE_AGENT_COMMAND_NAME, LITE_AGENT_COMMAND_TEMPLATE, LITE_ANALYZE_MESSAGE, LITE_POLICY_MARKER, LITE_SEARCH_MESSAGE, LITE_SYSTEM_PROMPT, ORIGINAL_ANALYZE_MESSAGE, ORIGINAL_SEARCH_MESSAGE, buildAtlasLiteOverlay, buildHephaestusLiteOverlay, buildPrometheusLiteOverlay, buildSisyphusLiteOverlay, } from "./lite-policy.js";
 function prependOverlay(prompt, overlay) {
     if (prompt.includes(LITE_POLICY_MARKER)) {
         return prompt;
@@ -54,4 +54,14 @@ export function ensureLiteAgentCommand(config) {
         argumentHint: "<request>",
     };
     config["command"] = commandRecord;
+}
+export function injectLiteSystemPrompt(output) {
+    if (!Array.isArray(output.system)) {
+        output.system = [LITE_SYSTEM_PROMPT];
+        return;
+    }
+    if (output.system.some((entry) => typeof entry === "string" && entry.includes(LITE_POLICY_MARKER))) {
+        return;
+    }
+    output.system.unshift(LITE_SYSTEM_PROMPT);
 }

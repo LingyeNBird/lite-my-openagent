@@ -1,9 +1,14 @@
-import { ensureLiteAgentCommand, rewriteAgentPrompts, rewriteInjectedModeText, rewriteLiteAgentSlashCommand, } from "./rewriters.js";
-const litePlugin = async () => {
+import { ensureLiteAgentCommandFile } from "./command-installer.js";
+import { ensureLiteAgentCommand, injectLiteSystemPrompt, rewriteAgentPrompts, rewriteInjectedModeText, rewriteLiteAgentSlashCommand, } from "./rewriters.js";
+const litePlugin = async (ctx) => {
+    ensureLiteAgentCommandFile(ctx.directory);
     return {
         config: async (config) => {
             ensureLiteAgentCommand(config);
             rewriteAgentPrompts(config);
+        },
+        "experimental.chat.system.transform": async (_input, output) => {
+            injectLiteSystemPrompt(output);
         },
         "chat.message": async (_input, output) => {
             for (const part of output.parts) {

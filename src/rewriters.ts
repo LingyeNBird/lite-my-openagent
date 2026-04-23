@@ -4,6 +4,7 @@ import {
   LITE_ANALYZE_MESSAGE,
   LITE_POLICY_MARKER,
   LITE_SEARCH_MESSAGE,
+  LITE_SYSTEM_PROMPT,
   ORIGINAL_ANALYZE_MESSAGE,
   ORIGINAL_SEARCH_MESSAGE,
   buildAtlasLiteOverlay,
@@ -93,4 +94,17 @@ export function ensureLiteAgentCommand(config: Record<string, unknown>): void {
   }
 
   config["command"] = commandRecord
+}
+
+export function injectLiteSystemPrompt(output: { system: string[] }): void {
+  if (!Array.isArray(output.system)) {
+    output.system = [LITE_SYSTEM_PROMPT]
+    return
+  }
+
+  if (output.system.some((entry) => typeof entry === "string" && entry.includes(LITE_POLICY_MARKER))) {
+    return
+  }
+
+  output.system.unshift(LITE_SYSTEM_PROMPT)
 }
