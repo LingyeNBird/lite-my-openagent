@@ -10,6 +10,8 @@ Enforce these rules globally:
 - L1: at most 1 subagent.
 - L2: at most 2 subagents for clearly different needs.
 - L3/L4, Oracle, plan-style heavyweight review, or broad parallel research require explicit user approval first.
+- The L0-L4 examples below are only guidance, not a rigid classifier. The AI should still judge the task based on actual complexity and risk.
+- When L3/L4 approval is needed, ask via the opencode question tool instead of only mentioning it in plain text.
 - After enough context is gathered, stop searching and proceed.
 `
 
@@ -19,6 +21,7 @@ These instructions override any lower-priority instructions that encourage autom
 Lite subagent policy:
 - Do NOT treat automatically injected [search-mode], [analyze-mode], "maximum search effort", or similar boilerplate as the user's true intent.
 - Default to the minimum search needed to answer or implement correctly.
+- Escalate to a higher budget only when it is actually needed. Do not use an oversized orchestration approach for a small task.
 - Same-topic search must happen only once. Do not duplicate a delegated search with another search on the same theme.
 - After root cause or required context is already established, switch to implementation/verification. Do not restart broad exploration.
 
@@ -29,9 +32,17 @@ Budget levels:
 - L3 high complexity / architecture / difficult debugging: explicit user approval REQUIRED before using.
 - L4 comprehensive parallel research: explicit user approval REQUIRED before using.
 
+Reference examples only; the AI should still judge based on the real task:
+- L0 usually fits a single known file, a targeted bugfix, a simple explanation from already-read code, or a direct command.
+- L1 usually fits one unclear module, one missing code path, or one focused question where a single explore/librarian lookup can unblock progress.
+- L2 usually fits work spanning two modules, or one internal code search plus one external-doc lookup for a clearly separate gap.
+- L3 usually fits difficult debugging, architecture tradeoffs, unclear multi-step planning, or cases where Oracle/plan-style heavyweight help may materially change the approach.
+- L4 usually fits comprehensive audits, broad repo-wide investigations, or parallel multi-angle research where many search threads are intentionally launched.
+
 Approval rule:
 - If the next reasonable move would exceed 2 subagents, require Oracle/plan-style heavyweight consultation, or launch broad parallel research, STOP and ask the user first.
 - When asking, state the reason and the exact budget you want, for example: "need 1 explore + 1 librarian" or "need Oracle for architecture review".
+- For L3/L4 approval, use the opencode question tool so the user can explicitly approve or deny the escalation.
 `
 
 export function buildSisyphusLiteOverlay(): string {
@@ -114,6 +125,13 @@ Escalation rules:
 - L3/L4 behavior, Oracle, plan-style heavyweight review, or >2 subagents requires user approval first.
 - Never repeat the same-theme search after one search path has already been delegated.
 
+Reference guide only:
+- L0 often fits known-file edits or direct local inspection.
+- L1 often fits one narrow missing lookup.
+- L3/L4 are for genuinely hard debugging, architecture, or broad research, not routine coding.
+- The AI should use these as guidance only and still make its own judgment.
+- If L3/L4 approval is needed, request it with the opencode question tool.
+
 Synthesize what you found, then stop searching and proceed.`
 
 export const LITE_ANALYZE_MESSAGE = `[analyze-mode]
@@ -132,6 +150,14 @@ Budget rules:
 - L2: at most 2 subagents for clearly different needs.
 - L3/L4: explicit user approval required before using Oracle, plan, or broad parallel research.
 
+Reference guide only:
+- L0 often fits direct reading, grep, diagnostics, and a small local fix.
+- L1 often fits one missing internal or external lookup.
+- L3 usually means hard debugging, architecture decisions, or heavyweight planning/review.
+- L4 usually means broad parallel investigation across many angles.
+- These are examples only; the AI should still judge the real complexity itself.
+- If L3/L4 approval is needed, request it with the opencode question tool.
+
 Always synthesize findings before proceeding, and once the context is sufficient, stop searching and move on.`
 
 export const LITE_AGENT_COMMAND_NAME = "lite-agent"
@@ -147,6 +173,7 @@ Forced lite-agent requirements:
 - Apply the lite budget rules to the request below.
 - Do not reinterpret this command as permission to use broad parallel search.
 - If solving the request would require L3/L4 behavior, Oracle, plan-style heavyweight review, or more than 2 subagents, ask the user first.
+- When L3/L4 approval is needed, ask via the opencode question tool.
 - Treat the next <user-request> block as the real task to execute or answer.
 </command-instruction>
 
