@@ -50,8 +50,8 @@ Example:
 ## Build
 
 ```bash
-npm install
-npm run build
+pnpm install
+pnpm run build
 ```
 
 ## Notes

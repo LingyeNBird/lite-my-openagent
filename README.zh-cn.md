@@ -50,8 +50,8 @@
 ## 构建
 
 ```bash
-npm install
-npm run build
+pnpm install
+pnpm run build
 ```
 
 ## 说明
