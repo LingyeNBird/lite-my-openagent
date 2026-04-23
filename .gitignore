@@ -1,4 +1,5 @@
 node_modules/
+.pack-check/
 
 # Logs
 npm-debug.log*

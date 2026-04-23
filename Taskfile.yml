@@ -1,0 +1,72 @@
+version: '3'
+
+vars:
+  PACKAGE_NAME: lite-my-openagent
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  check-clean:
+    desc: Ensure git working tree is clean before release
+    cmds:
+      - node scripts/check-clean.mjs
+
+  check-version:
+    desc: Validate VERSION input and ensure it is unpublished
+    requires:
+      vars: [VERSION]
+    cmds:
+      - node scripts/check-version.mjs {{.VERSION}} {{.PACKAGE_NAME}}
+
+  check-auth:
+    desc: Ensure registry authentication is available
+    cmds:
+      - node scripts/check-auth.mjs
+
+  bump-version:
+    desc: Update package.json and pnpm-lock.yaml version
+    requires:
+      vars: [VERSION]
+    cmds:
+      - pnpm version {{.VERSION}} --no-git-tag-version
+
+  preflight:
+    desc: Run release validation
+    cmds:
+      - pnpm run typecheck
+      - pnpm run pack:check
+
+  release-commit:
+    desc: Commit version bump for release
+    requires:
+      vars: [VERSION]
+    cmds:
+      - git add package.json pnpm-lock.yaml
+      - git commit -m "Release {{.VERSION}}"
+
+  release-tag:
+    desc: Create annotated git tag for release
+    requires:
+      vars: [VERSION]
+    cmds:
+      - git tag -a v{{.VERSION}} -m "Release {{.VERSION}}"
+
+  publish:
+    desc: "Prepare and publish a new pnpm-based npm release (usage: task publish VERSION=0.1.1)"
+    requires:
+      vars: [VERSION]
+    deps:
+      - check-clean
+      - check-version
+      - check-auth
+    cmds:
+      - task: bump-version
+      - task: preflight
+      - task: release-commit
+      - task: release-tag
+      - pnpm publish
+      - git push origin main
+      - git push origin v{{.VERSION}}
