@@ -1,6 +1,7 @@
 import { LITE_AGENT_COMMAND_NAME, LITE_POLICY_MARKER } from "./lite-policy.js";
 import { ensureLiteAgentCommand, injectLiteSystemPrompt, rewriteAgentPrompts, rewriteInjectedModeText, rewriteLiteAgentSlashCommand, } from "./rewriters.js";
 import { createRuntimeLogger } from "./runtime-log.js";
+import { createUpdateCheckHook } from "./update-checker.js";
 function summarizeText(text) {
     return {
         length: text.length,
@@ -78,7 +79,7 @@ function summarizeAgents(config) {
 async function logEvent(logger, event, details) {
     await logger.log(event, details);
 }
-const litePlugin = async (ctx) => {
+const litePlugin = async (ctx, options) => {
     const logger = await createRuntimeLogger();
     await logEvent(logger, "plugin.loaded", {
         ctxDirectory: ctx.directory ?? null,
@@ -86,7 +87,9 @@ const litePlugin = async (ctx) => {
         pid: process.pid,
         nodeVersion: process.version,
         logFilePath: logger.filePath,
+        pluginOptions: options ?? null,
     });
+    const updateCheckHook = createUpdateCheckHook(ctx, logger, options);
     return {
         config: async (config) => {
             await logEvent(logger, "hook.config.start", {
@@ -178,6 +181,7 @@ const litePlugin = async (ctx) => {
                 afterSummary: summarizeParts(output.parts),
             });
         },
+        event: updateCheckHook.event,
     };
 };
 const pluginModule = {

@@ -9,6 +9,12 @@ import {
   rewriteLiteAgentSlashCommand,
 } from "./rewriters.js"
 import { createRuntimeLogger, type RuntimeLogger } from "./runtime-log.js"
+import { createUpdateCheckHook } from "./update-checker.js"
+
+type LitePluginOptions = {
+  auto_update?: boolean
+  show_update_toast?: boolean
+}
 
 function summarizeText(text: string): Record<string, unknown> {
   return {
@@ -101,7 +107,7 @@ async function logEvent(logger: RuntimeLogger, event: string, details?: Record<s
   await logger.log(event, details)
 }
 
-const litePlugin: Plugin = async (ctx: { directory?: string }): Promise<Hooks> => {
+const litePlugin: Plugin = async (ctx, options?: LitePluginOptions): Promise<Hooks> => {
   const logger = await createRuntimeLogger()
   await logEvent(logger, "plugin.loaded", {
     ctxDirectory: ctx.directory ?? null,
@@ -109,7 +115,10 @@ const litePlugin: Plugin = async (ctx: { directory?: string }): Promise<Hooks> =
     pid: process.pid,
     nodeVersion: process.version,
     logFilePath: logger.filePath,
+    pluginOptions: options ?? null,
   })
+
+  const updateCheckHook = createUpdateCheckHook(ctx, logger, options)
 
   return {
     config: async (config: Record<string, unknown>) => {
@@ -259,6 +268,8 @@ const litePlugin: Plugin = async (ctx: { directory?: string }): Promise<Hooks> =
         afterSummary: summarizeParts(output.parts),
       })
     },
+
+    event: updateCheckHook.event,
   }
 }
 

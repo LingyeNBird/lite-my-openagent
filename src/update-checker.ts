@@ -1,0 +1,464 @@
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { homedir } from "node:os"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
+import { spawn } from "node:child_process"
+
+import type { RuntimeLogger } from "./runtime-log.js"
+
+const PACKAGE_NAME = "lite-my-openagent"
+const NPM_FETCH_TIMEOUT_MS = 5000
+const INSTALL_TIMEOUT_MS = 60000
+const EXACT_SEMVER_REGEX = /^\d+\.\d+\.\d+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$/
+
+type LitePluginOptions = {
+  auto_update?: boolean
+  show_update_toast?: boolean
+}
+
+type PluginInputLike = {
+  client?: unknown
+  directory: string
+}
+
+type PluginEntryInfo = {
+  entry: string
+  isPinned: boolean
+  pinnedVersion: string | null
+  configPath: string
+}
+
+type InstallResult = {
+  success: boolean
+  error?: string
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null
+}
+
+function getDataHome(): string {
+  return process.env["XDG_DATA_HOME"] ?? join(homedir(), ".local", "share")
+}
+
+function getCacheHome(): string {
+  return process.env["XDG_CACHE_HOME"] ?? join(homedir(), ".cache")
+}
+
+function getOpenCodeConfigDir(): string {
+  const explicit = process.env["OPENCODE_CONFIG_DIR"]?.trim()
+  if (explicit) {
+    return explicit
+  }
+
+  return join(process.env["XDG_CONFIG_HOME"] ?? join(homedir(), ".config"), "opencode")
+}
+
+function getPluginConfigPaths(directory: string): string[] {
+  return [
+    join(directory, ".opencode", "opencode.json"),
+    join(directory, ".opencode", "opencode.jsonc"),
+    join(getOpenCodeConfigDir(), "opencode.json"),
+    join(getOpenCodeConfigDir(), "opencode.jsonc"),
+  ]
+}
+
+function stripJsonComments(content: string): string {
+  return content
+    .replace(/^\s*\/\/.*$/gm, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+}
+
+function findPluginEntry(directory: string): PluginEntryInfo | null {
+  for (const configPath of getPluginConfigPaths(directory)) {
+    try {
+      if (!existsSync(configPath)) {
+        continue
+      }
+
+      const parsed = JSON.parse(stripJsonComments(readFileSync(configPath, "utf8"))) as { plugin?: unknown[] }
+      const plugins = Array.isArray(parsed.plugin) ? parsed.plugin : []
+
+      for (const item of plugins) {
+        const entry = typeof item === "string" ? item : Array.isArray(item) && typeof item[0] === "string" ? item[0] : null
+        if (!entry) {
+          continue
+        }
+
+        if (entry === PACKAGE_NAME) {
+          return { entry, isPinned: false, pinnedVersion: null, configPath }
+        }
+
+        if (entry.startsWith(`${PACKAGE_NAME}@`)) {
+          const pinnedVersion = entry.slice(PACKAGE_NAME.length + 1).trim()
+          return {
+            entry,
+            isPinned: EXACT_SEMVER_REGEX.test(pinnedVersion),
+            pinnedVersion,
+            configPath,
+          }
+        }
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return null
+}
+
+function findPackageJsonUp(startDir: string): string | null {
+  let current = startDir
+
+  for (;;) {
+    const candidate = join(current, "package.json")
+    if (existsSync(candidate)) {
+      return candidate
+    }
+
+    const parent = dirname(current)
+    if (parent === current) {
+      return null
+    }
+    current = parent
+  }
+}
+
+function getCurrentVersion(): string | null {
+  try {
+    const currentDir = dirname(fileURLToPath(import.meta.url))
+    const packageJsonPath = findPackageJsonUp(currentDir)
+    if (!packageJsonPath) {
+      return null
+    }
+
+    const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { version?: unknown }
+    return typeof pkg.version === "string" ? pkg.version : null
+  } catch {
+    return null
+  }
+}
+
+async function getLatestVersion(channel: string): Promise<string | null> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), NPM_FETCH_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(`https://registry.npmjs.org/-/package/${PACKAGE_NAME}/dist-tags`, {
+      signal: controller.signal,
+      headers: { Accept: "application/json" },
+    })
+    if (!response.ok) {
+      return null
+    }
+
+    const tags = (await response.json()) as Record<string, unknown>
+    const exact = tags[channel]
+    if (typeof exact === "string") {
+      return exact
+    }
+
+    return typeof tags["latest"] === "string" ? tags["latest"] : null
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+function extractChannel(version: string | null): string {
+  if (!version) {
+    return "latest"
+  }
+
+  if (!/^\d/.test(version)) {
+    return version
+  }
+
+  const prerelease = version.split("-")[1]
+  if (!prerelease) {
+    return "latest"
+  }
+
+  const channel = prerelease.match(/^(alpha|beta|rc|canary|next)/)
+  return channel?.[1] ?? "latest"
+}
+
+function getUpdateStrategy(pluginInfo: PluginEntryInfo): "bare" | "tag" | "pinned" {
+  if (pluginInfo.isPinned) {
+    return "pinned"
+  }
+
+  if (!pluginInfo.pinnedVersion) {
+    return "bare"
+  }
+
+  return "tag"
+}
+
+function getCacheWorkspaceDir(): string {
+  return join(getCacheHome(), "opencode", "packages")
+}
+
+function syncCachePackageJson(intentVersion: string, logger: RuntimeLogger): boolean {
+  try {
+    const workspaceDir = getCacheWorkspaceDir()
+    const packageJsonPath = join(workspaceDir, "package.json")
+    const current = existsSync(packageJsonPath)
+      ? (JSON.parse(readFileSync(packageJsonPath, "utf8")) as { dependencies?: Record<string, string> })
+      : {}
+
+    const next = {
+      ...current,
+      dependencies: {
+        ...(current.dependencies ?? {}),
+        [PACKAGE_NAME]: intentVersion,
+      },
+    }
+
+    writeFileSync(packageJsonPath, JSON.stringify(next, null, 2))
+    void logger.log("updater.cache_package_json.synced", { packageJsonPath, intentVersion })
+    return true
+  } catch (error) {
+    void logger.log("updater.cache_package_json.failed", {
+      intentVersion,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return false
+  }
+}
+
+function invalidateCachedPackage(logger: RuntimeLogger): void {
+  const workspaceDir = getCacheWorkspaceDir()
+  const packageDir = join(workspaceDir, "node_modules", PACKAGE_NAME)
+  const packageLockPath = join(workspaceDir, "package-lock.json")
+
+  if (existsSync(packageDir)) {
+    rmSync(packageDir, { recursive: true, force: true })
+    void logger.log("updater.cache_package.removed", { packageDir })
+  }
+
+  if (existsSync(packageLockPath)) {
+    rmSync(packageLockPath, { force: true })
+    void logger.log("updater.cache_lock.removed", { packageLockPath })
+  }
+}
+
+async function runInstall(logger: RuntimeLogger): Promise<InstallResult> {
+  const workspaceDir = getCacheWorkspaceDir()
+  const packageJsonPath = join(workspaceDir, "package.json")
+
+  if (!existsSync(packageJsonPath)) {
+    return { success: false, error: `Workspace not initialized: ${packageJsonPath}` }
+  }
+
+  return new Promise<InstallResult>((resolve) => {
+    const isWindows = process.platform === "win32"
+    const child = isWindows
+      ? spawn("cmd", ["/c", "npm", "install", "--ignore-scripts"], { cwd: workspaceDir, windowsHide: true })
+      : spawn("npm", ["install", "--ignore-scripts"], { cwd: workspaceDir })
+
+    let stdout = ""
+    let stderr = ""
+    const timeoutId = setTimeout(() => {
+      child.kill()
+      resolve({ success: false, error: `npm install timed out after ${INSTALL_TIMEOUT_MS}ms` })
+    }, INSTALL_TIMEOUT_MS)
+
+    child.stdout.on("data", (chunk: Buffer | string) => {
+      stdout += chunk.toString()
+    })
+    child.stderr.on("data", (chunk: Buffer | string) => {
+      stderr += chunk.toString()
+    })
+
+    child.on("error", (error) => {
+      clearTimeout(timeoutId)
+      resolve({ success: false, error: error.message })
+    })
+
+    child.on("close", (code) => {
+      clearTimeout(timeoutId)
+      void logger.log("updater.install.finished", {
+        workspaceDir,
+        exitCode: code ?? null,
+        stdout: stdout.trim().slice(0, 2000),
+        stderr: stderr.trim().slice(0, 2000),
+      })
+
+      if (code === 0) {
+        resolve({ success: true })
+        return
+      }
+
+      resolve({ success: false, error: `npm install exited with code ${code ?? "unknown"}` })
+    })
+  })
+}
+
+async function showToast(ctx: PluginInputLike, title: string, message: string, variant: "info" | "warning" | "success" = "info"): Promise<void> {
+  const client = isRecord(ctx.client) ? ctx.client : null
+  const tui = client && isRecord(client["tui"]) ? client["tui"] : null
+  const showToast = tui && typeof tui["showToast"] === "function" ? tui["showToast"] : null
+  if (!showToast) {
+    return
+  }
+
+  await Promise.resolve(
+    showToast({
+      body: {
+        title,
+        message,
+        variant,
+        duration: 5000,
+      },
+    }),
+  ).catch(() => undefined)
+}
+
+function getOptionBoolean(options: LitePluginOptions | undefined, key: keyof LitePluginOptions, fallback: boolean): boolean {
+  const value = options?.[key]
+  return typeof value === "boolean" ? value : fallback
+}
+
+function getParentID(properties: unknown): string | undefined {
+  if (!isRecord(properties)) {
+    return undefined
+  }
+
+  const info = properties["info"]
+  if (!isRecord(info)) {
+    return undefined
+  }
+
+  const parentID = info["parentID"]
+  return typeof parentID === "string" && parentID.length > 0 ? parentID : undefined
+}
+
+export function createUpdateCheckHook(ctx: PluginInputLike, logger: RuntimeLogger, options?: LitePluginOptions) {
+  const autoUpdate = getOptionBoolean(options, "auto_update", true)
+  const showUpdateToast = getOptionBoolean(options, "show_update_toast", true)
+  let hasChecked = false
+  let hasScheduled = false
+
+  return {
+    event: async ({ event }: { event: { type: string; properties?: unknown } }): Promise<void> => {
+      if (event.type !== "session.created") {
+        return
+      }
+      if (hasChecked || hasScheduled) {
+        return
+      }
+      if (getParentID(event.properties)) {
+        return
+      }
+
+      hasScheduled = true
+
+      setTimeout(() => {
+        hasChecked = true
+        void runUpdateCheck(ctx, logger, { autoUpdate, showUpdateToast })
+      }, 1000)
+    },
+  }
+}
+
+async function runUpdateCheck(
+  ctx: PluginInputLike,
+  logger: RuntimeLogger,
+  options: { autoUpdate: boolean; showUpdateToast: boolean },
+): Promise<void> {
+  const pluginInfo = findPluginEntry(ctx.directory)
+  await logger.log("updater.check.start", {
+    directory: ctx.directory,
+    autoUpdate: options.autoUpdate,
+    showUpdateToast: options.showUpdateToast,
+    pluginEntry: pluginInfo?.entry ?? null,
+  })
+
+  if (!pluginInfo) {
+    await logger.log("updater.check.skipped", { reason: "plugin_not_found_in_config" })
+    return
+  }
+
+  const currentVersion = getCurrentVersion() ?? pluginInfo.pinnedVersion
+  if (!currentVersion) {
+    await logger.log("updater.check.skipped", { reason: "current_version_unknown", entry: pluginInfo.entry })
+    return
+  }
+
+  const updateStrategy = getUpdateStrategy(pluginInfo)
+  if (updateStrategy !== "pinned") {
+    await logger.log("updater.config.non_pinned_entry", {
+      entry: pluginInfo.entry,
+      configPath: pluginInfo.configPath,
+      strategy: updateStrategy,
+      note: "Bare package names and dist-tags like @latest depend on opencode cache refresh behavior. Exact versions are more deterministic.",
+    })
+  }
+
+  const channel = extractChannel(pluginInfo.pinnedVersion ?? currentVersion)
+  const latestVersion = await getLatestVersion(channel)
+  await logger.log("updater.check.resolved_versions", {
+    entry: pluginInfo.entry,
+    configPath: pluginInfo.configPath,
+    isPinned: pluginInfo.isPinned,
+    strategy: updateStrategy,
+    currentVersion,
+    channel,
+    latestVersion,
+  })
+
+  if (!latestVersion) {
+    await logger.log("updater.check.skipped", { reason: "latest_version_unavailable", channel })
+    return
+  }
+
+  if (currentVersion === latestVersion) {
+    await logger.log("updater.check.skipped", { reason: "already_latest", currentVersion, channel })
+    return
+  }
+
+  if (pluginInfo.isPinned) {
+    if (options.showUpdateToast) {
+      await showToast(ctx, "lite-my-openagent update available", `v${latestVersion} available. Version is pinned in config.`, "warning")
+    }
+    await logger.log("updater.check.skipped", { reason: "pinned_version", currentVersion, latestVersion, entry: pluginInfo.entry })
+    return
+  }
+
+  if (!options.autoUpdate) {
+    if (options.showUpdateToast) {
+      await showToast(ctx, "lite-my-openagent update available", `v${latestVersion} available. Auto update is disabled.`, "warning")
+    }
+    await logger.log("updater.check.skipped", { reason: "auto_update_disabled", currentVersion, latestVersion })
+    return
+  }
+
+  const intentVersion = pluginInfo.pinnedVersion ?? "latest"
+  if (!syncCachePackageJson(intentVersion, logger)) {
+    if (options.showUpdateToast) {
+      await showToast(ctx, "lite-my-openagent update available", `v${latestVersion} available, but cache workspace sync failed.`, "warning")
+    }
+    return
+  }
+
+  invalidateCachedPackage(logger)
+  const installResult = await runInstall(logger)
+  if (!installResult.success) {
+    if (options.showUpdateToast) {
+      await showToast(ctx, "lite-my-openagent update available", `v${latestVersion} available, but install failed: ${installResult.error ?? "unknown error"}`, "warning")
+    }
+    await logger.log("updater.install.failed", {
+      currentVersion,
+      latestVersion,
+      error: installResult.error ?? null,
+    })
+    return
+  }
+
+  if (options.showUpdateToast) {
+    await showToast(ctx, "lite-my-openagent updated", `${currentVersion} → ${latestVersion}. Restart OpenCode to apply.`, "success")
+  }
+  await logger.log("updater.install.succeeded", { currentVersion, latestVersion, intentVersion })
+}
