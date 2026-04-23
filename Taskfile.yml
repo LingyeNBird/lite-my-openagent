@@ -66,6 +66,6 @@ tasks:
       - task: preflight
       - task: release-commit
       - task: release-tag
-      - pnpm publish
+      - pnpm publish --no-git-checks
       - git push origin main
       - git push origin v{{.VERSION}}
