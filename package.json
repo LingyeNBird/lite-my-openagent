@@ -1,6 +1,6 @@
 {
   "name": "lite-my-openagent",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "A lightweight policy overlay plugin for oh-my-openagent",
   "packageManager": "pnpm@10.28.0",
   "type": "module",
